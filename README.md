@@ -27,5 +27,5 @@ $ java -jar cg.jar -a <APK_FILE> -p <ANDROID_SDK_PLATFORM> -s <FILE_SOURCE_SINKS
 
 ### TODO Notes
 
-   * Handrick must implement the method that verifies if a given `SootMethod` is an _Android sensitive_ method
+   * Handrick must implement the method that verifies if a given `SootMethod` is an _Android sensitive_ method.
    * Handrick must implement the logic to compute the distances between entry point nodes and sensitive nodes in the graph. 
