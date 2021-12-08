@@ -19,7 +19,7 @@ This will output a file named:
    * `cg.jar`
 
 in the `target` directory (as usual). In order to run the program, which currently only outputs the number of nodes and edges of the graph, 
-you shold execute: 
+you should execute: 
 
 ````{shell}
 $ java -jar cg.jar -a <APK_FILE> -p <ANDROID_SDK_PLATFORM> -s <FILE_SOURCE_SINKS>
