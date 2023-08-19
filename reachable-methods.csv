@@ -1,3 +1,4 @@
+ReachableMethods
 <dummyMainClass: void dummyMainMethod(java.lang.String[])>
 <com.greenaddress.greenbits.GreenAddressApplication: void <clinit>()>
 <dummyMainClass: com.greenaddress.greenbits.ui.MnemonicActivity dummyMainMethod_com_greenaddress_greenbits_ui_MnemonicActivity(android.content.Intent)>

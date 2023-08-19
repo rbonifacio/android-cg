@@ -20,8 +20,11 @@ public class Main {
 
     public static void main(String args[]) throws Exception {
 
+        int i, j, k, l, m, n;
+        i = j = k = l = m = n = 0;
         String ccOutputFile = null;
-        for (int i = 0; i < args.length; i++) {
+
+        for (i = 0; i < args.length; i++) {
             if (args[i].equals("-t")) {
                 ccOutputFile = args[i + 1];
             }
@@ -51,7 +54,9 @@ public class Main {
         File out1 = new File("reachable-methods.csv");
         PrintStream stream1 = new PrintStream(out1);
         System.setOut(stream1);
-        int i=0;
+
+        i=0;
+        System.out.println("ReachableMethods");
         while(methods.hasNext()){
             System.out.println(methods.next().method().getSignature());
             i++;
@@ -61,36 +66,34 @@ public class Main {
         PrintStream stream2 = new PrintStream(out2);
         System.setOut(stream2);
 
-        List<String> allSignature = readLinesFromFile(ccOutputFile);
-        int j = 0;
-        int k = 0;
-        int l = 0;
-        int m = 0;
+        List<String> allWarnings = readLinesFromFile(ccOutputFile);
 
-        for (String signature : allSignature) {
+        System.out.println("Signature;reachable;found");
+        for (String warning : allWarnings) {
             try {
-                SootMethod method = Scene.v().getMethod(signature);
+                SootMethod method = Scene.v().getMethod(warning);
                 if(reachableMethods.contains(method)) {
-                    System.out.println("\""+ signature+"\"" + ", found, reachable");
+                    System.out.println("\""+ warning+"\"" + ";1;1");
                     j++;
                 }
                 else {
-                    System.out.println("\""+ signature+"\"" + ", found, not reachable");
+                    System.out.println("\""+ warning+"\"" + ";0;1");
                     k++;
                 }
             }catch (Throwable e){
-                System.out.println("\""+ signature+"\"" + ", not found, not reachable");
+                System.out.println("\""+ warning+"\"" + ";0;0");
                 l++;
             }
             m++;
         }
-
+        Set<String> signatures = new HashSet<>(allWarnings);
+        n = signatures.size();
         File out3 = new File("summary-reachable.csv");
         PrintStream stream3 = new PrintStream(out3);
         System.setOut(stream3);
 
-        System.out.println("t-reachable-methods, crypto-methods, crypto-reachable, crypto-not-reachable, crypto-not-found");
-        System.out.println(i+","+ m +","+ j +","+ k +","+ l);
+        System.out.println("reachable-methods;crypto-methods;crypto-warnings;reachable-warnings;not-reachable-warnings;not-found-methods");
+        System.out.println(i +";"+ n +";"+ m +";"+ j +";"+ k +";"+ l);
 
     }
 
