@@ -2,3 +2,4 @@
 .idea/
 sootOutput/
 target/
+scripts/.venv/
