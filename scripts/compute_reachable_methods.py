@@ -34,6 +34,7 @@ import csv
 import logging
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 logging.basicConfig(
@@ -108,15 +109,47 @@ def analyze(apk: Path, args: argparse.Namespace) -> bool:
         return False
 
 
+def _load_existing_timings(timing_csv: Path) -> dict:
+    if not timing_csv.exists():
+        return {}
+    with open(timing_csv, newline="") as f:
+        return {row["apk"]: row for row in csv.DictReader(f)}
+
+
 def run_analysis(apks: list, args: argparse.Namespace) -> bool:
     args.output.mkdir(parents=True, exist_ok=True)
-    succeeded, failed = 0, 0
+    timing_csv = args.output / "timings.csv"
+    previous_timings = _load_existing_timings(timing_csv)
+
+    succeeded, failed, skipped = 0, 0, 0
+    new_timings = []
     for apk in apks:
-        if analyze(apk, args):
+        output_file = args.output / f"{apk.stem}.txt"
+        if output_file.exists() and output_file.stat().st_size > 0:
+            log.info("Skipping %s (already analyzed)", apk.name)
+            skipped += 1
+            succeeded += 1
+            continue
+
+        start = time.perf_counter()
+        ok = analyze(apk, args)
+        elapsed = time.perf_counter() - start
+        new_timings.append({"apk": apk.name, "status": "ok" if ok else "failed", "elapsed_s": f"{elapsed:.2f}"})
+        log.info("Time    %s: %.2fs", apk.name, elapsed)
+        if ok:
             succeeded += 1
         else:
             failed += 1
-    log.info("Analysis done — %d succeeded, %d failed", succeeded, failed)
+
+    # Merge previous timings with new ones; new results overwrite previous for the same APK.
+    merged = {**previous_timings, **{r["apk"]: r for r in new_timings}}
+    with open(timing_csv, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["apk", "status", "elapsed_s"])
+        writer.writeheader()
+        writer.writerows(merged.values())
+    log.info("Timings written to %s", timing_csv)
+
+    log.info("Analysis done — %d succeeded, %d failed, %d skipped", succeeded, failed, skipped)
     return failed == 0
 
 
