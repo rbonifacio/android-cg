@@ -34,7 +34,9 @@ import csv
 import logging
 import subprocess
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 logging.basicConfig(
@@ -59,6 +61,7 @@ def parse_args() -> argparse.Namespace:
     analysis.add_argument("--java",       default="java", help="Java executable (default: java)")
     analysis.add_argument("--heap",       default="32g",  help="JVM max heap size (default: 32g)")
     analysis.add_argument("--timeout",    default=1800, type=int, help="Per-APK timeout in seconds (default: 1800)")
+    analysis.add_argument("--workers",    default=1, type=int, help="Number of parallel workers (default: 1)")
 
     sdk = parser.add_argument_group("SDK versions mode (requires androguard venv)")
     sdk.add_argument("--sdk-versions",   type=Path, metavar="OUTPUT_CSV",
@@ -121,36 +124,55 @@ def run_analysis(apks: list, args: argparse.Namespace) -> bool:
     timing_csv = args.output / "timings.csv"
     previous_timings = _load_existing_timings(timing_csv)
 
-    succeeded, failed, skipped = 0, 0, 0
-    new_timings = []
-    for apk in apks:
+    csv_lock = threading.Lock()
+    counters = {"succeeded": 0, "failed": 0, "skipped": 0}
+    counters_lock = threading.Lock()
+
+    def _append_timing(row: dict) -> None:
+        with csv_lock:
+            previous_timings[row["apk"]] = row
+            with open(timing_csv, "w", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=["apk", "status", "elapsed_s"])
+                writer.writeheader()
+                writer.writerows(previous_timings.values())
+
+    def process(apk: Path) -> bool:
         output_file = args.output / f"{apk.stem}.txt"
         if output_file.exists() and output_file.stat().st_size > 0:
             log.info("Skipping %s (already analyzed)", apk.name)
-            skipped += 1
-            succeeded += 1
-            continue
+            with counters_lock:
+                counters["skipped"] += 1
+                counters["succeeded"] += 1
+            return True
 
         start = time.perf_counter()
         ok = analyze(apk, args)
         elapsed = time.perf_counter() - start
-        new_timings.append({"apk": apk.name, "status": "ok" if ok else "failed", "elapsed_s": f"{elapsed:.2f}"})
         log.info("Time    %s: %.2fs", apk.name, elapsed)
-        if ok:
-            succeeded += 1
-        else:
-            failed += 1
+        _append_timing({"apk": apk.name, "status": "ok" if ok else "failed", "elapsed_s": f"{elapsed:.2f}"})
+        with counters_lock:
+            if ok:
+                counters["succeeded"] += 1
+            else:
+                counters["failed"] += 1
+        return ok
 
-    # Merge previous timings with new ones; new results overwrite previous for the same APK.
-    merged = {**previous_timings, **{r["apk"]: r for r in new_timings}}
-    with open(timing_csv, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["apk", "status", "elapsed_s"])
-        writer.writeheader()
-        writer.writerows(merged.values())
+    workers = args.workers
+    log.info("Starting analysis with %d worker(s)", workers)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(process, apk): apk for apk in apks}
+        for future in as_completed(futures):
+            try:
+                future.result()
+            except Exception as exc:
+                log.error("Unexpected error for %s: %s", futures[future].name, exc)
+                with counters_lock:
+                    counters["failed"] += 1
+
     log.info("Timings written to %s", timing_csv)
-
-    log.info("Analysis done — %d succeeded, %d failed, %d skipped", succeeded, failed, skipped)
-    return failed == 0
+    log.info("Analysis done — %d succeeded, %d failed, %d skipped",
+             counters["succeeded"], counters["failed"], counters["skipped"])
+    return counters["failed"] == 0
 
 
 # --- SDK versions mode -------------------------------------------------------
